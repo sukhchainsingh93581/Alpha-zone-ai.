@@ -102,6 +102,7 @@ const AppContent: React.FC = () => {
       const profileRef = ref(db, `users/${currentUser.uid}`);
       const unsubscribeProfile = onValue(profileRef, (snapshot) => {
         const profile = snapshot.val();
+        // Handle premium expiry
         if (profile?.is_premium && profile?.premium_expiry_timestamp > 0 && profile.premium_expiry_timestamp < Date.now()) {
           update(ref(db, `users/${currentUser.uid}`), {
             is_premium: false,
@@ -112,6 +113,7 @@ const AppContent: React.FC = () => {
         setUserProfile(profile);
         setLoading(false);
       }, (err) => {
+        console.error("Profile load error:", err);
         setLoading(false);
       });
       return () => unsubscribeProfile();
@@ -122,7 +124,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#070312] gap-6">
         <div className="w-20 h-20 border-4 border-[#00f2ff] border-t-transparent rounded-[24px] animate-spin"></div>
-        <p className="text-[#00f2ff] text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Initializing Neural Link</p>
+        <p className="text-[#00f2ff] text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Establishing Secure Neural Link</p>
       </div>
     );
   }

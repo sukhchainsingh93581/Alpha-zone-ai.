@@ -9,15 +9,28 @@ export const chatWithGeminiStream = async (
   attachment?: { data: string; mimeType: string }
 ) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    // Defensive check for process and process.env to prevent crashes in ESM/Vite/Netlify
+    let apiKey: string | undefined;
     
-    // Format the history for the Gemini API
+    try {
+      if (typeof process !== 'undefined' && process.env) {
+        apiKey = process.env.API_KEY;
+      }
+    } catch (e) {
+      console.warn("Process environment check failed, attempting fallback.");
+    }
+
+    if (!apiKey) {
+      throw new Error("NEURAL_SYNC_ERROR: API_KEY is missing. Ensure it is set in your environment variables.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+    
     const contents = history.map(msg => ({
       role: msg.role,
       parts: [{ text: msg.text }]
     }));
 
-    // If there's an attachment in the current turn, add it to the last user message parts
     if (attachment && contents.length > 0) {
       const lastMsg = contents[contents.length - 1];
       if (lastMsg.role === 'user') {
@@ -44,7 +57,9 @@ export const chatWithGeminiStream = async (
       }
     }
   } catch (error) {
-    console.error("Gemini AI Error:", error);
+    console.error("Gemini AI Neural Error:", error);
+    const errorMsg = error instanceof Error ? error.message : "Connection Interrupted";
+    onChunk(`[SYSTEM_ERROR]: ${errorMsg}`);
     throw error;
   }
 };
