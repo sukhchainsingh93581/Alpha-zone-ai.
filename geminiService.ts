@@ -2,10 +2,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 /**
- * ALPHA AI - NEURAL CORE SERVICE 3.0
- * Direct hardlink with strict history sanitization.
+ * ALPHA AI - NEURAL CORE SERVICE 4.0
+ * Updated with the provided Active API Key.
  */
-const ALPHA_KEY = "AIzaSyA3DuvOwAWRhPBTd94ivuEME78QPiHHhaQ";
+const ALPHA_KEY = "AIzaSyCNi0t_UO9_VBIvyD4ZhotulBucIxt6RCc";
 
 export const chatWithGeminiStream = async (
   history: { role: 'user' | 'model'; text: string }[],
@@ -17,14 +17,14 @@ export const chatWithGeminiStream = async (
   try {
     const ai = new GoogleGenAI({ apiKey: ALPHA_KEY });
     
-    // SANITIZE HISTORY: Gemini requires strict alternating user/model roles.
-    // If two user messages are together, we merge them.
+    // Gemini 3 strictly requires alternating roles: user -> model -> user
     const sanitizedHistory: any[] = [];
-    history.forEach((msg, idx) => {
+    
+    history.forEach((msg) => {
       const role = msg.role === 'user' ? 'user' : 'model';
+      // If the last message has the same role, merge it (prevents "user, user" errors)
       if (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === role) {
-        // Merge with previous part if role is the same
-        sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += `\n${msg.text}`;
+        sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += `\n\n${msg.text}`;
       } else {
         sanitizedHistory.push({
           role: role,
@@ -33,7 +33,7 @@ export const chatWithGeminiStream = async (
       }
     });
 
-    // Handle attachments on the last user message
+    // Handle file attachments for the current turn
     if (attachment && sanitizedHistory.length > 0) {
       const lastItem = sanitizedHistory[sanitizedHistory.length - 1];
       if (lastItem.role === 'user') {
@@ -46,39 +46,33 @@ export const chatWithGeminiStream = async (
       }
     }
 
-    // PRIMARY ATTEMPT
-    try {
-      const responseStream = await ai.models.generateContentStream({
-        model: modelName,
-        contents: sanitizedHistory,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.8,
-          topP: 0.95,
-        }
-      });
+    const responseStream = await ai.models.generateContentStream({
+      model: modelName,
+      contents: sanitizedHistory,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.9,
+        topP: 0.95,
+      }
+    });
 
-      let received = false;
-      for await (const chunk of responseStream) {
-        if (chunk.text) {
-          received = true;
-          onChunk(chunk.text);
-        }
+    let hasReceivedData = false;
+    for await (const chunk of responseStream) {
+      const text = chunk.text;
+      if (text) {
+        hasReceivedData = true;
+        onChunk(text);
       }
-      if (!received) onChunk("[SYSTEM]: Neural core returned empty buffer. Retrying...");
-    } catch (modelErr: any) {
-      // FALLBACK: If Pro model fails (common for new keys), switch to Flash immediately
-      if (modelName !== 'gemini-3-flash-preview') {
-        console.warn("Pro model failed, falling back to Flash...");
-        return chatWithGeminiStream(history, systemInstruction, onChunk, 'gemini-3-flash-preview', attachment);
-      }
-      throw modelErr;
+    }
+
+    if (!hasReceivedData) {
+      onChunk("[SYSTEM_ALERT]: Neural Link connected but returned empty buffer. Check Quota.");
     }
 
   } catch (error: any) {
-    console.error("Neural Interface Error:", error);
-    const msg = error?.message || "Connection Interrupted";
-    onChunk(`[NEURAL_ERROR]: ${msg}\n\nACTION: Check if your API key has billing enabled or if the Gemini 3 model is available in your region.`);
+    console.error("Neural Interface Critical Failure:", error);
+    const errorMessage = error?.message || "Internal Connection Error";
+    onChunk(`[NEURAL_ERROR]: ${errorMessage}\n\nCause: The API key might be restricted or region-locked. Please verify the key status in Google AI Studio.`);
     throw error;
   }
 };
