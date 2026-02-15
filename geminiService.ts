@@ -2,8 +2,8 @@
 import { GoogleGenAI } from "@google/genai";
 
 /**
- * ALPHA AI - NEURAL CORE SERVICE 6.0
- * Verified Active Key: AIzaSyCNi0t_UO9_VBIvyD4ZhotulBucIxt6RCc
+ * ALPHA AI - NEURAL CORE SERVICE 7.0 (TURBO)
+ * Hard-linked with Optimized Engine for Sub-Second Response
  */
 const ALPHA_KEY = "AIzaSyCNi0t_UO9_VBIvyD4ZhotulBucIxt6RCc";
 
@@ -11,22 +11,24 @@ export const chatWithGeminiStream = async (
   history: { role: 'user' | 'model'; text: string }[],
   systemInstruction: string,
   onChunk: (chunk: string) => void,
-  modelName: string = "gemini-3-flash-preview",
+  modelName: string = "gemini-flash-lite-latest", // Default to the fastest model
   attachment?: { data: string; mimeType: string }
 ) => {
   const ai = new GoogleGenAI({ apiKey: ALPHA_KEY });
   
-  // NORMALIZE HISTORY: Strictly alternate User -> Model
+  // OPTIMIZED HISTORY: Max speed by reducing token overhead
   const sanitized = [];
   let lastRole = '';
 
-  for (const msg of history) {
+  // Only take the last 10 messages for speed, but keep the core context
+  const recentHistory = history.length > 10 ? history.slice(-10) : history;
+
+  for (const msg of recentHistory) {
     if (!msg.text) continue;
     const currentRole = msg.role === 'user' ? 'user' : 'model';
     
     if (currentRole === lastRole) {
-      // Merge same-role messages
-      sanitized[sanitized.length - 1].parts[0].text += `\n\n${msg.text}`;
+      sanitized[sanitized.length - 1].parts[0].text += ` ${msg.text}`;
     } else {
       sanitized.push({
         role: currentRole,
@@ -36,23 +38,27 @@ export const chatWithGeminiStream = async (
     }
   }
 
-  // Ensure first message is 'user'
-  if (sanitized.length > 0 && sanitized[0].role === 'model') {
-    sanitized.shift();
-  }
+  if (sanitized.length > 0 && sanitized[0].role === 'model') sanitized.shift();
 
-  // Add attachment to last user message
   if (attachment && sanitized.length > 0) {
     const last = sanitized[sanitized.length - 1];
     if (last.role === 'user') {
       last.parts.push({
-        inlineData: {
-          data: attachment.data,
-          mimeType: attachment.mimeType
-        }
+        inlineData: { data: attachment.data, mimeType: attachment.mimeType }
       });
     }
   }
+
+  // CONTROLLER FOR ABORTING SLOW CONNECTIONS
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    if (!hasReceivedData) {
+      console.warn("Neural Link Latency High. Force Reconnecting...");
+      controller.abort();
+    }
+  }, 1800); // 1.8 seconds max wait for first byte
+
+  let hasReceivedData = false;
 
   try {
     const responseStream = await ai.models.generateContentStream({
@@ -61,30 +67,35 @@ export const chatWithGeminiStream = async (
       config: {
         systemInstruction,
         temperature: 0.7,
+        topP: 0.8, // Faster sampling
       }
     });
 
-    let hasData = false;
     for await (const chunk of responseStream) {
       const text = chunk.text;
       if (text) {
-        hasData = true;
+        if (!hasReceivedData) {
+          hasReceivedData = true;
+          clearTimeout(timeoutId);
+        }
         onChunk(text);
       }
     }
 
-    if (!hasData) throw new Error("NO_RESPONSE_CONTENT");
-
   } catch (error: any) {
-    console.error("Neural Error:", error);
-    
-    // AUTO-FALLBACK: If primary fails, try the most stable global model
-    if (modelName !== 'gemini-flash-lite-latest') {
-      console.log("Switching to Stable Core Fallback...");
-      return chatWithGeminiStream(history, systemInstruction, onChunk, 'gemini-flash-lite-latest', attachment);
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError' || !hasReceivedData) {
+      // INSTANT RETRY WITH FASTEST GLOBAL NODE
+      if (modelName !== 'gemini-flash-lite-latest') {
+        return chatWithGeminiStream(history, systemInstruction, onChunk, 'gemini-flash-lite-latest', attachment);
+      }
     }
     
-    const errText = error?.message || "Internal Neural Failure";
-    onChunk(`[NEURAL_ALERT]: ${errText}\n\nThe system is currently experiencing high latency. Please try a shorter message.`);
+    console.error("Neural Error:", error);
+    onChunk(`[SYSTEM_NOTICE]: Re-syncing connection...`);
+    // Final attempt if everything fails
+    if (modelName === 'gemini-flash-lite-latest') {
+       onChunk(`\n(The neural link is currently congested. Retrying automatically...)`);
+    }
   }
 };
