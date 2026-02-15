@@ -8,15 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script>
-    /**
-     * NEURAL BOOTSTRAPPER (PERMANENT FIX)
-     * Directly injecting the API Key to bypass Netlify's paid Shared Variables.
-     */
-    window.process = {
-      env: {
-        API_KEY: "AIzaSyA3DuvOwAWRhPBTd94ivuEME78QPiHHhaQ"
-      }
-    };
+    // Polyfill for process to prevent bundler errors
+    window.process = window.process || { env: {} };
   </script>
   <style>
     :root {
