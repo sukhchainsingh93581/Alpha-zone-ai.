@@ -160,7 +160,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
       : agent?.system_instruction || '';
 
-    // Upgraded model mapping as per Gemini 3 requirements
     const modelToUse = (agentId === 'pro-ai' || agentId === 'pro-dev' || agentId === 'html-gen') 
       ? 'gemini-3-pro-preview' 
       : 'gemini-3-flash-preview';
@@ -189,15 +188,23 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const hasHtml = (text: string) => /<html|<!DOCTYPE html|body>/i.test(text);
+
   return (
     <div className="fixed inset-0 top-20 pb-24 z-10 flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--primary-bg)' }}>
-      {/* Neural Background Layer */}
+      {/* Background AI Overlay */}
       <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.03] pointer-events-none transition-all duration-1000">
-        <img 
-          src="https://img.freepik.com/premium-photo/futuristic-robot-head-artificial-intelligence-humanoid-cyborg-portrait_756748-4774.jpg" 
-          alt="Agent" 
-          className={`w-full h-full max-w-lg object-contain filter grayscale invert transition-transform duration-[2000ms] ${isStreaming ? 'scale-110' : 'scale-100'}`}
-        />
+        <div className={`relative w-full h-full max-w-lg transition-all duration-1000 ${isStreaming ? 'opacity-40 scale-110' : 'opacity-10 scale-100'}`}>
+          <img 
+            src="https://img.freepik.com/premium-photo/futuristic-robot-head-artificial-intelligence-humanoid-cyborg-portrait_756748-4774.jpg" 
+            alt="Agent" 
+            className="w-full h-full object-contain filter grayscale invert"
+          />
+        </div>
       </div>
 
       {/* Header */}
@@ -224,7 +231,12 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                
                {msg.role === 'model' && (
                  <div className="mt-2 flex items-center gap-2 px-1">
-                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
+                   {hasHtml(msg.text) && (
+                     <button onClick={() => { const blob = new Blob([msg.text], { type: 'text/html' }); window.open(URL.createObjectURL(blob), '_blank'); }} className="p-2 bg-[#00ff9d]/10 text-[#00ff9d] rounded-lg hover:bg-[#00ff9d] hover:text-black transition-all border border-[#00ff9d]/20 flex items-center gap-1.5">
+                       <Play size={12} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run</span>
+                     </button>
+                   )}
+                   <button onClick={() => copyToClipboard(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
                      <Copy size={12} /> <span className="text-[9px] font-black uppercase">Copy</span>
                    </button>
                    <button onClick={() => { if(chatId && user) remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`)); }} className="p-2 bg-red-500/5 text-red-500/40 rounded-lg hover:text-red-500 transition-all border border-red-500/10 flex items-center gap-1.5 ml-auto">
@@ -276,14 +288,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
               />
               
               <div className="flex items-center gap-1.5 px-1">
-                <button 
-                  onClick={() => handleSendMessage()}
-                  disabled={(!input.trim() && !attachment) || isStreaming}
-                  className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all ${(!input.trim() && !attachment) || isStreaming ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30 active:scale-95'}`}
-                >
-                  <Send size={18} />
-                </button>
-
                 {/* File Attachment Button - Right Side */}
                 <button 
                   onClick={handleFileClick}
@@ -293,6 +297,14 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                   <Paperclip size={18} />
                   {!user?.is_premium && <Lock size={10} className="absolute bottom-1 right-1 text-white/30" />}
                   {attachment && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#00ff9d] rounded-full animate-ping"></div>}
+                </button>
+
+                <button 
+                  onClick={() => handleSendMessage()}
+                  disabled={(!input.trim() && !attachment) || isStreaming}
+                  className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all ${(!input.trim() && !attachment) || isStreaming ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30 active:scale-95'}`}
+                >
+                  <Send size={18} />
                 </button>
               </div>
             </div>
