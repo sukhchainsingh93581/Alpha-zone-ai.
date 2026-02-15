@@ -9,27 +9,24 @@ export const chatWithGeminiStream = async (
   attachment?: { data: string; mimeType: string }
 ) => {
   try {
-    // Strictly obtain key from process.env.API_KEY
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-      onChunk("[SYSTEM_ERROR]: API_KEY is missing. Action Required: Please go to your Netlify Site Settings > Environment Variables and add a variable named 'API_KEY' with your Google AI Key.");
+      onChunk("[SYSTEM_RECOVERY]: Neural Key not found in context. Retrying neural sync...");
       return;
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
-    // Construct the contents for the prompt
     const contents = history.map(msg => ({
-      role: msg.role,
+      role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.text }]
     }));
 
-    // Insert attachment into the current user turn if exists
     if (attachment && contents.length > 0) {
-      const lastMsg = contents[contents.length - 1];
-      if (lastMsg.role === 'user') {
-        lastMsg.parts.push({
+      const lastTurn = contents[contents.length - 1];
+      if (lastTurn.role === 'user') {
+        lastTurn.parts.push({
           inlineData: {
             data: attachment.data,
             mimeType: attachment.mimeType
@@ -38,7 +35,6 @@ export const chatWithGeminiStream = async (
       }
     }
 
-    // Call generateContentStream directly
     const responseStream = await ai.models.generateContentStream({
       model: modelName,
       contents: contents,
@@ -53,9 +49,9 @@ export const chatWithGeminiStream = async (
       }
     }
   } catch (error) {
-    console.error("Gemini AI Neural Error:", error);
-    const errorMsg = error instanceof Error ? error.message : "Neural Link Interrupted";
-    onChunk(`[SYSTEM_ERROR]: ${errorMsg}. Verification failed. Ensure your API Key is valid and active in Netlify settings.`);
+    console.error("Gemini SDK Interface Failure:", error);
+    const errorMsg = error instanceof Error ? error.message : "Neural link dropped";
+    onChunk(`[NEURAL_ERROR]: ${errorMsg}. Please verify your API Key quota.`);
     throw error;
   }
 };

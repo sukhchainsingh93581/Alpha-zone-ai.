@@ -160,6 +160,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
       : agent?.system_instruction || '';
 
+    // Advanced Model Selection for Gemini 3
     const modelToUse = (agentId === 'pro-ai' || agentId === 'pro-dev' || agentId === 'html-gen') 
       ? 'gemini-3-pro-preview' 
       : 'gemini-3-flash-preview';
@@ -186,10 +187,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     } finally {
       setIsStreaming(false);
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   const hasHtml = (text: string) => /<html|<!DOCTYPE html|body>/i.test(text);
@@ -236,7 +233,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                        <Play size={12} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run</span>
                      </button>
                    )}
-                   <button onClick={() => copyToClipboard(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
+                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
                      <Copy size={12} /> <span className="text-[9px] font-black uppercase">Copy</span>
                    </button>
                    <button onClick={() => { if(chatId && user) remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`)); }} className="p-2 bg-red-500/5 text-red-500/40 rounded-lg hover:text-red-500 transition-all border border-red-500/10 flex items-center gap-1.5 ml-auto">
@@ -288,7 +285,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
               />
               
               <div className="flex items-center gap-1.5 px-1">
-                {/* File Attachment Button - Right Side */}
+                {/* File Attachment Button - Right Side Positioning */}
                 <button 
                   onClick={handleFileClick}
                   className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${user?.is_premium ? 'text-[#00f2ff] bg-[#00f2ff]/5 hover:bg-[#00f2ff]/10 premium-pulse' : 'text-white/10 bg-black/20'}`}
