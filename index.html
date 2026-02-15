@@ -7,16 +7,6 @@
   <title>ALPHA AI Studio</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script>
-    // DEFENSIVE SHIELD: Prevent Netlify/Vite blank screen by polyfilling process.env
-    window.process = {
-      env: {
-        NODE_ENV: 'production',
-        // The API key is injected by the platform environment
-        API_KEY: '' 
-      }
-    };
-  </script>
   <style>
     /* Light Mode Variables */
     :root {

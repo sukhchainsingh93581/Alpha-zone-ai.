@@ -25,7 +25,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [customInstructions, setCustomInstructions] = useState('');
   
-  // File System State
   const [attachment, setAttachment] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -161,6 +160,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
       : agent?.system_instruction || '';
 
+    // Upgraded model mapping as per Gemini 3 requirements
     const modelToUse = (agentId === 'pro-ai' || agentId === 'pro-dev' || agentId === 'html-gen') 
       ? 'gemini-3-pro-preview' 
       : 'gemini-3-flash-preview';

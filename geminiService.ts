@@ -9,15 +9,17 @@ export const chatWithGeminiStream = async (
   attachment?: { data: string; mimeType: string }
 ) => {
   try {
-    // Definitive API Key retrieval for Netlify environments
-    const apiKey = (window as any).process?.env?.API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
+    // Strictly retrieve the API key from process.env.API_KEY as per core requirements
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-      console.warn("API_KEY not found in environment, falling back to empty string (will cause API error).");
+      onChunk("[SYSTEM_ERROR]: API_KEY is missing. Please configure it in your environment variables.");
+      return;
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
+    // Construct the contents for the prompt
     const contents = history.map(msg => ({
       role: msg.role,
       parts: [{ text: msg.text }]
@@ -36,6 +38,7 @@ export const chatWithGeminiStream = async (
       }
     }
 
+    // Call generateContentStream directly as per naming guidelines
     const responseStream = await ai.models.generateContentStream({
       model: modelName,
       contents: contents,
@@ -52,7 +55,7 @@ export const chatWithGeminiStream = async (
   } catch (error) {
     console.error("Gemini AI Neural Error:", error);
     const errorMsg = error instanceof Error ? error.message : "Neural Link Interrupted";
-    onChunk(`[SYSTEM_ERROR]: ${errorMsg}. Please ensure API_KEY is set in Netlify Environment Variables.`);
+    onChunk(`[SYSTEM_ERROR]: ${errorMsg}. Check your API Key and Network connectivity.`);
     throw error;
   }
 };
