@@ -5,7 +5,7 @@ import { UserProfile, ChatMessage, AIAgent } from '../types';
 import { ref, onValue, update, push, remove, get } from 'firebase/database';
 import { db } from '../firebase';
 import { chatWithGeminiStream } from '../geminiService';
-import { Send, Trash2, Copy, Paperclip, ChevronLeft, Sparkles, Sliders, X, Zap, Cpu, Play, Lock, Image as ImageIcon, FileArchive, RefreshCw } from 'lucide-react';
+import { Send, Trash2, Copy, Paperclip, ChevronLeft, Sparkles, X, Cpu, Play, Lock, Image as ImageIcon, FileArchive, RefreshCw } from 'lucide-react';
 
 interface ChatProps { user: UserProfile | null; }
 
@@ -26,19 +26,12 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const SYSTEM_CORE = `
-  You are a Professional Software Architect. 
-  When coding: Provide complete, copy-pasteable blocks.
-  When explaining: Be concise and technical.
-  User Profile: ${user?.username || 'Guest'}.
-  `;
-
   useEffect(() => {
     const agentData: Record<string, AIAgent> = {
-      'prompt-gen': { id: 'prompt-gen', name: 'Prompt Generator', description: '', api_type: 'gemini', system_instruction: `Logic Architect Core. ${SYSTEM_CORE}`, is_enabled: true },
-      'html-gen': { id: 'html-gen', name: 'HTML Generator', description: '', api_type: 'gemini', system_instruction: `Full-Stack Dev Core. ${SYSTEM_CORE}`, is_enabled: true },
-      'pro-ai': { id: 'pro-ai', name: 'Custom Pro AI', description: '', api_type: 'gemini', system_instruction: `Advanced Reasoning Core. ${SYSTEM_CORE}`, is_enabled: true },
-      'pro-dev': { id: 'pro-dev', name: 'Pro Developer', description: '', api_type: 'gemini', system_instruction: `System Architect Core. ${SYSTEM_CORE}`, is_enabled: true },
+      'prompt-gen': { id: 'prompt-gen', name: 'Prompt Generator', description: '', api_type: 'gemini', system_instruction: `Expert AI Instruction Engineer.`, is_enabled: true },
+      'html-gen': { id: 'html-gen', name: 'HTML Generator', description: '', api_type: 'gemini', system_instruction: `Full-Stack Web Architect. Always provide runnable HTML.`, is_enabled: true },
+      'pro-ai': { id: 'pro-ai', name: 'Custom Pro AI', description: '', api_type: 'gemini', system_instruction: `Advanced Logic Reasoning Engine.`, is_enabled: true },
+      'pro-dev': { id: 'pro-dev', name: 'Pro Developer', description: '', api_type: 'gemini', system_instruction: `Senior Software Architect. High technical depth.`, is_enabled: true },
     };
     setAgent(agentData[agentId || ''] || agentData['prompt-gen']);
 
@@ -101,7 +94,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     const userMsg: ChatMessage = { 
       id: Date.now().toString(), 
       role: 'user', 
-      text: attachment ? `[ATTACHMENT: ${attachment.name}]\n${prompt}` : prompt, 
+      text: attachment ? `[FILE: ${attachment.name}]\n${prompt}` : prompt, 
       timestamp: Date.now() 
     };
     
@@ -109,23 +102,20 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     update(ref(db, `users/${user.uid}/chats/${activeChatId}`), { lastMessage: prompt, timestamp: Date.now() });
 
     const history = [...messages, userMsg].map(m => ({ role: m.role, text: m.text }));
-    const instruction = agentId === 'pro-ai' && customInstructions 
-      ? `${agent?.system_instruction}\n\nUSER_CONFIG: ${customInstructions}` 
+    const system = agentId === 'pro-ai' && customInstructions 
+      ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
       : agent?.system_instruction || '';
-
-    // Choose model based on agent type
-    const model = (agentId === 'pro-dev' || agentId === 'html-gen') ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
 
     try {
       let fullResponse = '';
       await chatWithGeminiStream(
         history, 
-        instruction, 
+        system, 
         (chunk) => {
           setStreamingText(prev => prev + chunk);
           fullResponse += chunk;
         }, 
-        model,
+        agentId === 'pro-dev' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
         attachment ? { data: attachment.data, mimeType: attachment.mimeType } : undefined
       );
 
@@ -133,8 +123,8 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'model', text: fullResponse, timestamp: Date.now() };
         await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), aiMsg);
       }
-    } catch (err: any) {
-      console.error("Final catch in Chat component:", err);
+    } catch (err) {
+      console.error(err);
     } finally {
       setStreamingText('');
       setIsStreaming(false);
@@ -155,12 +145,14 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
 
   return (
     <div className="fixed inset-0 top-20 pb-24 z-10 flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--primary-bg)' }}>
+      {/* Background Decor */}
       <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
-        <div className={`relative w-full h-full max-w-lg transition-all duration-1000 ${isStreaming ? 'scale-110 opacity-30' : 'scale-100 opacity-10'}`}>
+        <div className={`relative w-full h-full max-w-lg transition-all duration-1000 ${isStreaming ? 'scale-110 opacity-30' : 'opacity-10'}`}>
           <img src="https://img.freepik.com/premium-photo/futuristic-robot-head-artificial-intelligence-humanoid-cyborg-portrait_756748-4774.jpg" className="w-full h-full object-contain filter grayscale invert" alt="bg" />
         </div>
       </div>
 
+      {/* Header */}
       <div className="relative z-10 px-4 py-3 flex items-center justify-between border-b" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="p-2 hover:bg-white/5 rounded-full" style={{ color: 'var(--text-primary)' }}><ChevronLeft size={20} /></button>
@@ -170,18 +162,28 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         </div>
       </div>
 
+      {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className="max-w-[90%] md:max-w-[75%]">
-               <div className={`p-4 rounded-[24px] ${msg.role === 'user' ? 'bg-[#00f2ff] text-black rounded-tr-none shadow-lg shadow-[#00f2ff]/10' : 'glass rounded-tl-none border'}`} 
+            <div className="max-w-[88%] md:max-w-[75%]">
+               <div className={`p-4 rounded-[24px] ${msg.role === 'user' ? 'bg-[#00f2ff] text-black rounded-tr-none shadow-lg' : 'glass rounded-tl-none border shadow-xl'}`} 
                     style={msg.role === 'model' ? { backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' } : {}}>
                  <p className="text-[13px] leading-relaxed whitespace-pre-wrap font-medium">{msg.text}</p>
                </div>
                {msg.role === 'model' && (
-                 <div className="mt-2 flex items-center gap-2">
-                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 rounded-lg text-white/30 hover:text-white transition-all"><Copy size={12} /></button>
-                   <button onClick={() => chatId && user && remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`))} className="p-2 bg-red-500/5 rounded-lg text-red-500/40 ml-auto"><Trash2 size={12} /></button>
+                 <div className="mt-2 flex items-center gap-2 px-1">
+                   {/<html|body>/i.test(msg.text) && (
+                     <button onClick={() => { const b = new Blob([msg.text], {type:'text/html'}); window.open(URL.createObjectURL(b)); }} className="p-2 bg-[#00ff9d]/10 text-[#00ff9d] rounded-lg border border-[#00ff9d]/20 flex items-center gap-1.5">
+                       <Play size={10} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run</span>
+                     </button>
+                   )}
+                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg flex items-center gap-1.5">
+                     <Copy size={10} /> <span className="text-[9px] font-black uppercase">Copy</span>
+                   </button>
+                   <button onClick={() => chatId && user && remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`))} className="p-2 bg-red-500/5 text-red-500/40 rounded-lg ml-auto">
+                     <Trash2 size={10} />
+                   </button>
                  </div>
                )}
             </div>
@@ -189,13 +191,12 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         ))}
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="max-w-[90%] glass p-4 rounded-[24px] rounded-tl-none border border-[#00f2ff]/30">
+            <div className="max-w-[88%] glass p-4 rounded-[24px] rounded-tl-none border border-[#00f2ff]/30 shadow-2xl shadow-[#00f2ff]/5">
                {streamingText ? (
-                 <p className="text-[13px] whitespace-pre-wrap">{streamingText}</p>
+                 <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{streamingText}</p>
                ) : (
-                 <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 bg-[#00f2ff] rounded-full animate-ping"></div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#00f2ff]">Neural Interface Syncing...</span>
+                 <div className="flex gap-2 items-center text-[9px] font-black uppercase text-[#00f2ff]">
+                    <Cpu size={14} className="animate-spin" /> TRANSMITTING...
                  </div>
                )}
             </div>
@@ -203,17 +204,18 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         )}
       </div>
 
+      {/* Input */}
       <div className="relative z-10 p-3 bg-transparent border-t" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex flex-col max-w-4xl mx-auto gap-2">
           {attachment && (
             <div className="flex items-center gap-2 p-2 px-4 rounded-xl glass border border-[#00f2ff]/30 self-start animate-in slide-in-from-bottom-2">
               <ImageIcon size={14} className="text-[#00f2ff]" />
-              <span className="text-[9px] font-black uppercase tracking-widest truncate">{attachment.name}</span>
+              <span className="text-[9px] font-black uppercase tracking-widest truncate max-w-[150px]">{attachment.name}</span>
               <button onClick={() => setAttachment(null)} className="p-1 hover:bg-white/5 rounded-full"><X size={12} /></button>
             </div>
           )}
           <div className="flex items-center gap-2">
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="*/*" />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
             <div className="flex-1 glass rounded-2xl p-1.5 flex items-center gap-2 border transition-all" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
               <textarea 
                 rows={1}
@@ -227,8 +229,12 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
               <button onClick={() => user?.is_premium ? fileInputRef.current?.click() : navigate('/premium')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${user?.is_premium ? 'text-[#00f2ff]' : 'opacity-20'}`}>
                 <Paperclip size={18} />
               </button>
-              <button onClick={handleSendMessage} disabled={isStreaming || (!input.trim() && !attachment)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isStreaming || (!input.trim() && !attachment) ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30'}`}>
-                {isStreaming ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+              <button 
+                onClick={handleSendMessage} 
+                disabled={isStreaming || (!input.trim() && !attachment)} 
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isStreaming || (!input.trim() && !attachment) ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30 active:scale-95'}`}
+              >
+                {isStreaming ? <RefreshCw size={18} className="animate-spin text-black" /> : <Send size={18} />}
               </button>
             </div>
           </div>
