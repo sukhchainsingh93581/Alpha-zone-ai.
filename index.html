@@ -7,8 +7,18 @@
   <title>ALPHA AI Studio</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    // DEFENSIVE SHIELD: Prevent Netlify/Vite blank screen by polyfilling process.env
+    window.process = {
+      env: {
+        NODE_ENV: 'production',
+        // The API key is injected by the platform environment
+        API_KEY: '' 
+      }
+    };
+  </script>
   <style>
-    /* Light Mode Variables (Default) */
+    /* Light Mode Variables */
     :root {
       --primary-bg: #F4F7F9;
       --secondary-bg: #E2E8F0;
@@ -23,7 +33,7 @@
       --warning: #F59E0B;
     }
 
-    /* Dark Mode Variables (Activated by .dark class) */
+    /* Dark Mode Variables */
     .dark {
       --primary-bg: #070312;
       --secondary-bg: #100821;
@@ -83,6 +93,15 @@
     .theme-bg-card {
       background-color: var(--card-bg);
     }
+
+    @keyframes pulse-cyan {
+      0% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 242, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0); }
+    }
+    .premium-pulse {
+      animation: pulse-cyan 2s infinite;
+    }
   </style>
 <script type="importmap">
 {
@@ -102,5 +121,6 @@
 </head>
 <body>
   <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>

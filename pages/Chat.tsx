@@ -5,7 +5,7 @@ import { UserProfile, ChatMessage, AIAgent } from '../types';
 import { ref, onValue, update, push, remove, get } from 'firebase/database';
 import { db } from '../firebase';
 import { chatWithGeminiStream } from '../geminiService';
-import { Send, Trash2, Copy, Paperclip, ChevronLeft, Sparkles, Sliders, X, Save, Zap, Cpu, RefreshCw, Play, Lock, FileText, Image as ImageIcon, FileArchive } from 'lucide-react';
+import { Send, Trash2, Copy, Paperclip, ChevronLeft, Sparkles, Sliders, X, Save, Zap, Cpu, RefreshCw, Play, Lock, FileText, Image as ImageIcon, FileArchive, UploadCloud } from 'lucide-react';
 
 interface ChatProps {
   user: UserProfile | null;
@@ -25,6 +25,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [customInstructions, setCustomInstructions] = useState('');
   
+  // File System State
   const [attachment, setAttachment] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -82,16 +83,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     }
   }, [messages, streamingText, isStreaming]);
 
-  const saveInstructions = async () => {
-    if (!user || agentId !== 'pro-ai') return;
-    try {
-      await update(ref(db, `users/${user.uid}/custom_instructions`), { [agentId]: customInstructions });
-      setShowInstructionModal(false);
-    } catch (err) {
-      alert("Failed to sync logic");
-    }
-  };
-
   const handleFileClick = () => {
     if (!user?.is_premium) {
       navigate('/premium');
@@ -104,8 +95,8 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Neural Overload: File exceeds 10MB limit.");
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Neural Limit: Please select a file under 5MB.");
       return;
     }
 
@@ -198,23 +189,15 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  const hasHtml = (text: string) => /<html|<!DOCTYPE html|body>/i.test(text);
-
   return (
     <div className="fixed inset-0 top-20 pb-24 z-10 flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--primary-bg)' }}>
-      {/* Background AI Overlay */}
+      {/* Neural Background Layer */}
       <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.03] pointer-events-none transition-all duration-1000">
-        <div className={`relative w-full h-full max-w-lg transition-all duration-1000 ${isStreaming ? 'opacity-40 scale-110' : 'opacity-10 scale-100'}`}>
-          <img 
-            src="https://img.freepik.com/premium-photo/futuristic-robot-head-artificial-intelligence-humanoid-cyborg-portrait_756748-4774.jpg" 
-            alt="Agent" 
-            className="w-full h-full object-contain filter grayscale invert"
-          />
-        </div>
+        <img 
+          src="https://img.freepik.com/premium-photo/futuristic-robot-head-artificial-intelligence-humanoid-cyborg-portrait_756748-4774.jpg" 
+          alt="Agent" 
+          className={`w-full h-full max-w-lg object-contain filter grayscale invert transition-transform duration-[2000ms] ${isStreaming ? 'scale-110' : 'scale-100'}`}
+        />
       </div>
 
       {/* Header */}
@@ -241,12 +224,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                
                {msg.role === 'model' && (
                  <div className="mt-2 flex items-center gap-2 px-1">
-                   {hasHtml(msg.text) && (
-                     <button onClick={() => { const blob = new Blob([msg.text], { type: 'text/html' }); window.open(URL.createObjectURL(blob), '_blank'); }} className="p-2 bg-[#00ff9d]/10 text-[#00ff9d] rounded-lg hover:bg-[#00ff9d] hover:text-black transition-all border border-[#00ff9d]/20 flex items-center gap-1.5">
-                       <Play size={12} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run</span>
-                     </button>
-                   )}
-                   <button onClick={() => copyToClipboard(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
+                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-all border border-white/5 flex items-center gap-1.5">
                      <Copy size={12} /> <span className="text-[9px] font-black uppercase">Copy</span>
                    </button>
                    <button onClick={() => { if(chatId && user) remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`)); }} className="p-2 bg-red-500/5 text-red-500/40 rounded-lg hover:text-red-500 transition-all border border-red-500/10 flex items-center gap-1.5 ml-auto">
@@ -270,7 +248,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       <div className="relative z-10 p-3 bg-transparent border-t transition-colors" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex flex-col max-w-4xl mx-auto gap-2">
           {attachment && (
-            <div className="flex items-center gap-2 p-2 px-4 rounded-xl glass border border-[#00f2ff]/30 animate-in slide-in-from-bottom-2 self-start max-w-xs">
+            <div className="flex items-center gap-2 p-2 px-4 rounded-xl glass border border-[#00f2ff]/30 animate-in slide-in-from-bottom-2 self-start max-w-xs mb-1">
               {attachment.mimeType.startsWith('image/') ? <ImageIcon size={14} className="text-[#00f2ff]" /> : <FileArchive size={14} className="text-[#00f2ff]" />}
               <span className="text-[9px] font-black uppercase tracking-widest truncate">{attachment.name}</span>
               <button onClick={() => setAttachment(null)} className="p-1 hover:bg-white/5 rounded-full ml-1"><X size={12} /></button>
@@ -297,17 +275,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
               />
               
-              <div className="flex items-center gap-1">
-                {/* File Attachment Button - Right Side */}
-                <button 
-                  onClick={handleFileClick}
-                  className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${user?.is_premium ? 'text-[var(--accent-color)] hover:bg-white/5 shadow-[0_0_10px_var(--accent-color)]/20' : 'text-white/20 hover:bg-black/20'}`}
-                >
-                  <Paperclip size={18} />
-                  {!user?.is_premium && <Lock size={10} className="absolute bottom-1 right-1 text-white/40" />}
-                  {attachment && <div className="absolute top-1 right-1 w-2 h-2 bg-[#00f2ff] rounded-full animate-pulse shadow-[0_0_8px_#00f2ff]"></div>}
-                </button>
-
+              <div className="flex items-center gap-1.5 px-1">
                 <button 
                   onClick={() => handleSendMessage()}
                   disabled={(!input.trim() && !attachment) || isStreaming}
@@ -315,32 +283,45 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                 >
                   <Send size={18} />
                 </button>
+
+                {/* File Attachment Button - Right Side */}
+                <button 
+                  onClick={handleFileClick}
+                  className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${user?.is_premium ? 'text-[#00f2ff] bg-[#00f2ff]/5 hover:bg-[#00f2ff]/10 premium-pulse' : 'text-white/10 bg-black/20'}`}
+                  title={user?.is_premium ? "Neural File Sync" : "Premium Lock"}
+                >
+                  <Paperclip size={18} />
+                  {!user?.is_premium && <Lock size={10} className="absolute bottom-1 right-1 text-white/30" />}
+                  {attachment && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#00ff9d] rounded-full animate-ping"></div>}
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Custom Logic Modal */}
+      {/* Instruction Modal */}
       {showInstructionModal && (
-        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-3xl flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-3xl flex items-center justify-center p-6">
           <div className="glass p-8 rounded-[40px] w-full max-w-md border border-[#ff00c8]/30 relative animate-in zoom-in-95 overflow-hidden">
             <button onClick={() => setShowInstructionModal(false)} className="absolute top-6 right-6 text-white/30 hover:text-white p-2"><X size={20} /></button>
             <div className="flex items-center gap-4 mb-6">
                <div className="w-12 h-12 bg-[#ff00c8]/20 rounded-2xl flex items-center justify-center text-[#ff00c8]"><Zap size={24} /></div>
-               <div>
-                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">NEURAL <span className="text-[#ff00c8]">OVERRIDE</span></h2>
-                  <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Logical Patching Active</p>
-               </div>
+               <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">NEURAL <span className="text-[#ff00c8]">OVERRIDE</span></h2>
             </div>
             <textarea 
               className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-xs font-medium focus:outline-none focus:border-[#ff00c8]/40 min-h-[160px] uppercase"
-              placeholder="Inject custom logic..."
+              placeholder="Inject logic..."
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
             />
-            <button onClick={saveInstructions} className="w-full mt-6 py-4 rounded-2xl bg-[#ff00c8] text-white font-black text-[10px] tracking-[0.3em] uppercase shadow-xl hover:shadow-[#ff00c8]/40 transition-all flex items-center justify-center gap-2">
-              <Save size={14} /> SYNC NEURAL LOGIC
+            <button onClick={async () => {
+              if (user) {
+                await update(ref(db, `users/${user.uid}/custom_instructions`), { [agentId!]: customInstructions });
+                setShowInstructionModal(false);
+              }
+            }} className="w-full mt-6 py-4 rounded-2xl bg-[#ff00c8] text-white font-black text-[10px] tracking-[0.3em] uppercase shadow-xl hover:shadow-[#ff00c8]/40 transition-all">
+              SYNC NEURAL LOGIC
             </button>
           </div>
         </div>

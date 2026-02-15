@@ -9,19 +9,11 @@ export const chatWithGeminiStream = async (
   attachment?: { data: string; mimeType: string }
 ) => {
   try {
-    // Defensive check for process and process.env to prevent crashes in ESM/Vite/Netlify
-    let apiKey: string | undefined;
+    // Definitive API Key retrieval for Netlify environments
+    const apiKey = (window as any).process?.env?.API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
     
-    try {
-      if (typeof process !== 'undefined' && process.env) {
-        apiKey = process.env.API_KEY;
-      }
-    } catch (e) {
-      console.warn("Process environment check failed, attempting fallback.");
-    }
-
     if (!apiKey) {
-      throw new Error("NEURAL_SYNC_ERROR: API_KEY is missing. Ensure it is set in your environment variables.");
+      console.warn("API_KEY not found in environment, falling back to empty string (will cause API error).");
     }
 
     const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -31,6 +23,7 @@ export const chatWithGeminiStream = async (
       parts: [{ text: msg.text }]
     }));
 
+    // Insert attachment into the current user turn if exists
     if (attachment && contents.length > 0) {
       const lastMsg = contents[contents.length - 1];
       if (lastMsg.role === 'user') {
@@ -58,8 +51,8 @@ export const chatWithGeminiStream = async (
     }
   } catch (error) {
     console.error("Gemini AI Neural Error:", error);
-    const errorMsg = error instanceof Error ? error.message : "Connection Interrupted";
-    onChunk(`[SYSTEM_ERROR]: ${errorMsg}`);
+    const errorMsg = error instanceof Error ? error.message : "Neural Link Interrupted";
+    onChunk(`[SYSTEM_ERROR]: ${errorMsg}. Please ensure API_KEY is set in Netlify Environment Variables.`);
     throw error;
   }
 };
