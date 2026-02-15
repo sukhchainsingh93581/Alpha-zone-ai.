@@ -26,12 +26,62 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // USER'S STRICT CUSTOM INSTRUCTIONS - FULL VERSION
+  const DEVELOPER_STRICT_RULES = `
+  🔒 CUSTOM INSTRUCTION FOR APP & GAME DEVELOPMENT AI
+  🎯 ROLE & BEHAVIOR
+  Tum ek professional app & game developer AI ho jo modern web apps, admin panels aur HTML5 games banata hai.
+  Tumhe strictly niche diye gaye sabhi rules follow karne honge, bina shortcut ke.
+
+  1️⃣ APP / GAME IDEA HANDLING RULE
+  Jab user sirf app/game ka naam ya basic idea likhe, tab AI mandatory flow follow kare:
+  - Pehle trending apps/games ideas suggest kare
+  - Phir user ke selected app ke liye complete feature list de (numbered format me, detail ke sath)
+
+  2️⃣ FEATURE SELECTION FLOW (STRICT)
+  User feature list me se kuch numbers select kare ya ALL select bole.
+  👉 Usse pehle AI code ya final prompt kabhi na likhe.
+  User ke selection ke baad hi: AI professional & detailed PROMPT/CODE likhe.
+  Tech stack: HTML5, CSS3, Vanilla JavaScript, Font Awesome Icons.
+
+  3️⃣ SINGLE FILE RULE (VERY STRICT)
+  - Sirf User Panel ho → ✔️ 1 single HTML file only
+  - Admin + User Panel ho → ✔️ Admin panel = 1 HTML, ✔️ User panel = 1 HTML
+  ❌ 2 se zyada files allowed nahi.
+
+  4️⃣ ADMIN / USER PANEL & FIREBASE RULES
+  Agar app me Admin + User panel ho:
+  - ✔️ Firebase Realtime Database ONLY
+  - ❌ Firebase Storage kabhi use nahi hogi
+  - 🔐 Admin Login: Admin ID & Password Firebase me manually create honge. Logic simple hoga.
+  - 🖼 Images: Externally hosted hongi (Direct image URL usage).
+
+  5️⃣ SINGLE HTML & MULTIPLAYER GAME RULE
+  - Normal single-file HTML app → ❌ Firebase allowed nahi.
+  - Single-file ONLINE multiplayer game → ✔️ Firebase RTDB allowed.
+
+  6️⃣ PROMPT & TOOLS REQUIREMENT
+  Code/Prompt me saare selected features, required tools aur functional logic clear mention ho.
+  Code Sketchware, HopWeb, InfinityFree me easily convert ho sake.
+
+  7️⃣ UI / DESIGN RULES
+  UI highly modern honi chahiye (Native Android feel, Java/Kotlin look & UX).
+
+  8️⃣ THEME & FONT RULE
+  AI pehle latest UI themes aur font combinations suggest kare. User jo select kare usi pe final prompt base ho.
+
+  9️⃣ HEAVY CODE & CONTINUE RULE
+  Code bada ho to 2-3 parts me likho. Quality compromise nahi karni. User bole "continue from last" to wahi se start karo.
+
+  ✅ FINAL STRICT RULE: Ek bhi rule break nahi hona chahiye. Structure, flow aur discipline mandatory hai.
+  `;
+
   useEffect(() => {
     const agentData: Record<string, AIAgent> = {
-      'prompt-gen': { id: 'prompt-gen', name: 'Prompt Generator', description: '', api_type: 'gemini', system_instruction: `Expert AI Instruction Engineer.`, is_enabled: true },
-      'html-gen': { id: 'html-gen', name: 'HTML Generator', description: '', api_type: 'gemini', system_instruction: `Full-Stack Web Architect. Always provide runnable HTML.`, is_enabled: true },
-      'pro-ai': { id: 'pro-ai', name: 'Custom Pro AI', description: '', api_type: 'gemini', system_instruction: `Advanced Logic Reasoning Engine.`, is_enabled: true },
-      'pro-dev': { id: 'pro-dev', name: 'Pro Developer', description: '', api_type: 'gemini', system_instruction: `Senior Software Architect. High technical depth.`, is_enabled: true },
+      'prompt-gen': { id: 'prompt-gen', name: 'Prompt Generator', description: '', api_type: 'gemini', system_instruction: `${DEVELOPER_STRICT_RULES}\nFocus: Prompt Engineering & Logical Flow.`, is_enabled: true },
+      'html-gen': { id: 'html-gen', name: 'HTML Generator', description: '', api_type: 'gemini', system_instruction: `${DEVELOPER_STRICT_RULES}\nFocus: Full-Stack HTML Code & Design.`, is_enabled: true },
+      'pro-ai': { id: 'pro-ai', name: 'Custom Pro AI', description: '', api_type: 'gemini', system_instruction: `${DEVELOPER_STRICT_RULES}\nFocus: Advanced Problem Solving.`, is_enabled: true },
+      'pro-dev': { id: 'pro-dev', name: 'Pro Developer', description: '', api_type: 'gemini', system_instruction: `${DEVELOPER_STRICT_RULES}\nFocus: System Architecture & Android-like UI.`, is_enabled: true },
     };
     setAgent(agentData[agentId || ''] || agentData['prompt-gen']);
 
@@ -69,7 +119,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     if ((!input.trim() && !attachment) || isStreaming || !user) return;
 
     if (user.remaining_ai_seconds <= 0 && !user.is_premium) {
-      alert('AI Balance Exhausted!');
+      alert('AI Balance Exhausted! Please upgrade to continue.');
       navigate('/premium');
       return;
     }
@@ -103,8 +153,10 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
 
     const history = [...messages, userMsg].map(m => ({ role: m.role, text: m.text }));
     const system = agentId === 'pro-ai' && customInstructions 
-      ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
+      ? `${agent?.system_instruction}\n\nUSER_CONFIG: ${customInstructions}` 
       : agent?.system_instruction || '';
+
+    const startTime = Date.now();
 
     try {
       let fullResponse = '';
@@ -115,13 +167,23 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
           setStreamingText(prev => prev + chunk);
           fullResponse += chunk;
         }, 
-        agentId === 'pro-dev' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
+        (agentId === 'pro-dev' || agentId === 'html-gen') ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
         attachment ? { data: attachment.data, mimeType: attachment.mimeType } : undefined
       );
+
+      const endTime = Date.now();
+      const usedSeconds = Math.ceil((endTime - startTime) / 1000);
 
       if (fullResponse) {
         const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'model', text: fullResponse, timestamp: Date.now() };
         await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), aiMsg);
+
+        // Deduct time for non-premium users
+        if (!user.is_premium) {
+          const currentSeconds = user.remaining_ai_seconds || 0;
+          const newSeconds = Math.max(0, currentSeconds - usedSeconds);
+          update(ref(db, `users/${user.uid}`), { remaining_ai_seconds: newSeconds });
+        }
       }
     } catch (err) {
       console.error(err);
@@ -143,6 +205,14 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
     reader.readAsDataURL(file);
   };
 
+  const containsHTML = (text: string) => {
+    const lower = text.toLowerCase();
+    return lower.includes('<!doctype html>') || 
+           lower.includes('<html') ||
+           lower.includes('```html') ||
+           (lower.includes('<head>') && lower.includes('<body>'));
+  };
+
   return (
     <div className="fixed inset-0 top-20 pb-24 z-10 flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--primary-bg)' }}>
       {/* Background Decor */}
@@ -156,9 +226,16 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       <div className="relative z-10 px-4 py-3 flex items-center justify-between border-b" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="p-2 hover:bg-white/5 rounded-full" style={{ color: 'var(--text-primary)' }}><ChevronLeft size={20} /></button>
-          <h2 className="font-black text-[10px] tracking-widest uppercase flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            {agent?.name} {user?.is_premium && <Sparkles size={10} className="text-pink-500" />}
-          </h2>
+          <div className="flex flex-col">
+            <h2 className="font-black text-[10px] tracking-widest uppercase flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              {agent?.name} {user?.is_premium && <Sparkles size={10} className="text-pink-500" />}
+            </h2>
+            {!user?.is_premium && (
+              <span className="text-[7px] font-black uppercase text-[#00f2ff] opacity-60">
+                AI Balance: {Math.floor((user?.remaining_ai_seconds || 0) / 60)}m {(user?.remaining_ai_seconds || 0) % 60}s
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -173,12 +250,16 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                </div>
                {msg.role === 'model' && (
                  <div className="mt-2 flex items-center gap-2 px-1">
-                   {/<html|body>/i.test(msg.text) && (
-                     <button onClick={() => { const b = new Blob([msg.text], {type:'text/html'}); window.open(URL.createObjectURL(b)); }} className="p-2 bg-[#00ff9d]/10 text-[#00ff9d] rounded-lg border border-[#00ff9d]/20 flex items-center gap-1.5">
-                       <Play size={10} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run</span>
+                   {containsHTML(msg.text) && (
+                     <button onClick={() => { 
+                       const code = msg.text.includes('```html') ? msg.text.split('```html')[1].split('```')[0] : msg.text;
+                       const b = new Blob([code], {type:'text/html'}); 
+                       window.open(URL.createObjectURL(b)); 
+                     }} className="p-2 bg-[#00ff9d]/10 text-[#00ff9d] rounded-lg border border-[#00ff9d]/20 flex items-center gap-1.5 transition-all active:scale-90 shadow-lg">
+                       <Play size={10} fill="currentColor" /> <span className="text-[9px] font-black uppercase">Run Browser</span>
                      </button>
                    )}
-                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg flex items-center gap-1.5">
+                   <button onClick={() => navigator.clipboard.writeText(msg.text)} className="p-2 bg-white/5 text-white/40 rounded-lg flex items-center gap-1.5 transition-all active:scale-90">
                      <Copy size={10} /> <span className="text-[9px] font-black uppercase">Copy</span>
                    </button>
                    <button onClick={() => chatId && user && remove(ref(db, `users/${user.uid}/chats/${chatId}/messages/${(msg as any).msgId}`))} className="p-2 bg-red-500/5 text-red-500/40 rounded-lg ml-auto">
@@ -193,7 +274,20 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
           <div className="flex justify-start">
             <div className="max-w-[88%] glass p-4 rounded-[24px] rounded-tl-none border border-[#00f2ff]/30 shadow-2xl shadow-[#00f2ff]/5">
                {streamingText ? (
-                 <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{streamingText}</p>
+                 <>
+                   <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{streamingText}</p>
+                   {containsHTML(streamingText) && (
+                      <div className="mt-3 pt-3 border-t border-white/5">
+                        <button onClick={() => { 
+                          const code = streamingText.includes('```html') ? streamingText.split('```html')[1].split('```')[0] : streamingText;
+                          const b = new Blob([code], {type:'text/html'}); 
+                          window.open(URL.createObjectURL(b)); 
+                        }} className="p-2 bg-[#00ff9d] text-black rounded-lg flex items-center gap-1.5 font-black text-[9px] uppercase shadow-lg active:scale-95">
+                          <Play size={10} fill="currentColor" /> Preview Live
+                        </button>
+                      </div>
+                   )}
+                 </>
                ) : (
                  <div className="flex gap-2 items-center text-[9px] font-black uppercase text-[#00f2ff]">
                     <Cpu size={14} className="animate-spin" /> TRANSMITTING...
@@ -211,7 +305,7 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
             <div className="flex items-center gap-2 p-2 px-4 rounded-xl glass border border-[#00f2ff]/30 self-start animate-in slide-in-from-bottom-2">
               <ImageIcon size={14} className="text-[#00f2ff]" />
               <span className="text-[9px] font-black uppercase tracking-widest truncate max-w-[150px]">{attachment.name}</span>
-              <button onClick={() => setAttachment(null)} className="p-1 hover:bg-white/5 rounded-full"><X size={12} /></button>
+              <button onClick={() => setAttachment(null)} className="p-1 hover:bg-white/5 rounded-full transition-colors hover:text-red-500"><X size={12} /></button>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -226,13 +320,13 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
               />
-              <button onClick={() => user?.is_premium ? fileInputRef.current?.click() : navigate('/premium')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${user?.is_premium ? 'text-[#00f2ff]' : 'opacity-20'}`}>
+              <button onClick={() => user?.is_premium ? fileInputRef.current?.click() : navigate('/premium')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${user?.is_premium ? 'text-[#00f2ff] hover:bg-white/5' : 'opacity-20 cursor-not-allowed'}`}>
                 <Paperclip size={18} />
               </button>
               <button 
                 onClick={handleSendMessage} 
                 disabled={isStreaming || (!input.trim() && !attachment)} 
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isStreaming || (!input.trim() && !attachment) ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30 active:scale-95'}`}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isStreaming || (!input.trim() && !attachment) ? 'opacity-20' : 'bg-[#00f2ff] text-black shadow-lg shadow-[#00f2ff]/30 active:scale-95 hover:brightness-110'}`}
               >
                 {isStreaming ? <RefreshCw size={18} className="animate-spin text-black" /> : <Send size={18} />}
               </button>
