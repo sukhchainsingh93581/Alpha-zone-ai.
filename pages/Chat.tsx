@@ -93,20 +93,10 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Neural Limit: Please select a file under 5MB.");
-      return;
-    }
-
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64 = (reader.result as string).split(',')[1];
-      setAttachment({
-        data: base64,
-        mimeType: file.type || 'application/octet-stream',
-        name: file.name
-      });
+      setAttachment({ data: base64, mimeType: file.type || 'application/octet-stream', name: file.name });
     };
     reader.readAsDataURL(file);
   };
@@ -146,21 +136,20 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
       timestamp: Date.now() 
     };
     
-    const historyForAI = messages.map(m => ({ role: m.role, text: m.text }));
-    if (!customPrompt) {
-      historyForAI.push({ role: 'user', text: promptToSend });
-      await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), userMsg);
-      update(ref(db, `users/${user.uid}/chats/${activeChatId}`), {
-        lastMessage: promptToSend,
-        timestamp: Date.now()
-      });
-    }
+    // Always push user message to Firebase first to show it in UI
+    await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), userMsg);
+    update(ref(db, `users/${user.uid}/chats/${activeChatId}`), {
+      lastMessage: promptToSend,
+      timestamp: Date.now()
+    });
+
+    const historyForAI = [...messages, userMsg].map(m => ({ role: m.role, text: m.text }));
 
     const finalInstruction = agentId === 'pro-ai' && customInstructions 
       ? `${agent?.system_instruction}\n\nUSER_OVERRIDE: ${customInstructions}` 
       : agent?.system_instruction || '';
 
-    // Advanced Model Selection for Gemini 3
+    // Primary: Gemini 3 Pro, Fallback is handled inside geminiService
     const modelToUse = (agentId === 'pro-ai' || agentId === 'pro-dev' || agentId === 'html-gen') 
       ? 'gemini-3-pro-preview' 
       : 'gemini-3-flash-preview';
@@ -178,12 +167,23 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         attachment ? { data: attachment.data, mimeType: attachment.mimeType } : undefined
       );
 
-      const aiMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'model', text: fullResponse, timestamp: Date.now() };
+      const aiMsg: ChatMessage = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'model', 
+        text: fullResponse || "[SYSTEM]: Neural Link Timed Out.", 
+        timestamp: Date.now() 
+      };
       await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), aiMsg);
       setStreamingText('');
       setAttachment(null); 
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      const aiMsg: ChatMessage = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'model', 
+        text: `[SYSTEM_FAIL]: ${err?.message || "Internal Connection Error"}`, 
+        timestamp: Date.now() 
+      };
+      await push(ref(db, `users/${user.uid}/chats/${activeChatId}/messages`), aiMsg);
     } finally {
       setIsStreaming(false);
     }
@@ -193,7 +193,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
 
   return (
     <div className="fixed inset-0 top-20 pb-24 z-10 flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--primary-bg)' }}>
-      {/* Background AI Overlay */}
       <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.03] pointer-events-none transition-all duration-1000">
         <div className={`relative w-full h-full max-w-lg transition-all duration-1000 ${isStreaming ? 'opacity-40 scale-110' : 'opacity-10 scale-100'}`}>
           <img 
@@ -204,7 +203,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Header */}
       <div className="relative z-10 px-4 py-3 flex items-center justify-between border-b transition-colors" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors" style={{ color: 'var(--text-primary)' }}>
@@ -216,7 +214,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
         {messages.map((msg, idx) => (
           <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
@@ -253,7 +250,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
         )}
       </div>
 
-      {/* Input Module */}
       <div className="relative z-10 p-3 bg-transparent border-t transition-colors" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex flex-col max-w-4xl mx-auto gap-2">
           {attachment && (
@@ -266,12 +262,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
 
           <div className="flex items-center gap-2">
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="*/*" />
-
-            {agentId === 'pro-ai' && user?.is_premium && (
-              <button onClick={() => setShowInstructionModal(true)} className="w-12 h-12 shrink-0 rounded-2xl bg-[#ff00c8]/10 text-[#ff00c8] border border-[#ff00c8]/30 shadow-lg flex items-center justify-center hover:bg-[#ff00c8]/20 transition-all active:scale-90">
-                <Sliders size={18} />
-              </button>
-            )}
             
             <div className="flex-1 glass rounded-2xl p-1.5 flex items-center gap-2 border transition-all" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)' }}>
               <textarea 
@@ -285,15 +275,12 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
               />
               
               <div className="flex items-center gap-1.5 px-1">
-                {/* File Attachment Button - Right Side Positioning */}
                 <button 
                   onClick={handleFileClick}
                   className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${user?.is_premium ? 'text-[#00f2ff] bg-[#00f2ff]/5 hover:bg-[#00f2ff]/10 premium-pulse' : 'text-white/10 bg-black/20'}`}
-                  title={user?.is_premium ? "Neural File Sync" : "Premium Lock"}
                 >
                   <Paperclip size={18} />
                   {!user?.is_premium && <Lock size={10} className="absolute bottom-1 right-1 text-white/30" />}
-                  {attachment && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#00ff9d] rounded-full animate-ping"></div>}
                 </button>
 
                 <button 
@@ -308,33 +295,6 @@ const Chat: React.FC<ChatProps> = ({ user }) => {
           </div>
         </div>
       </div>
-
-      {/* Instruction Modal */}
-      {showInstructionModal && (
-        <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-3xl flex items-center justify-center p-6">
-          <div className="glass p-8 rounded-[40px] w-full max-w-md border border-[#ff00c8]/30 relative animate-in zoom-in-95 overflow-hidden">
-            <button onClick={() => setShowInstructionModal(false)} className="absolute top-6 right-6 text-white/30 hover:text-white p-2"><X size={20} /></button>
-            <div className="flex items-center gap-4 mb-6">
-               <div className="w-12 h-12 bg-[#ff00c8]/20 rounded-2xl flex items-center justify-center text-[#ff00c8]"><Zap size={24} /></div>
-               <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">NEURAL <span className="text-[#ff00c8]">OVERRIDE</span></h2>
-            </div>
-            <textarea 
-              className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-xs font-medium focus:outline-none focus:border-[#ff00c8]/40 min-h-[160px] uppercase"
-              placeholder="Inject logic..."
-              value={customInstructions}
-              onChange={(e) => setCustomInstructions(e.target.value)}
-            />
-            <button onClick={async () => {
-              if (user) {
-                await update(ref(db, `users/${user.uid}/custom_instructions`), { [agentId!]: customInstructions });
-                setShowInstructionModal(false);
-              }
-            }} className="w-full mt-6 py-4 rounded-2xl bg-[#ff00c8] text-white font-black text-[10px] tracking-[0.3em] uppercase shadow-xl hover:shadow-[#ff00c8]/40 transition-all">
-              SYNC NEURAL LOGIC
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

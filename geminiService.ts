@@ -2,10 +2,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 /**
- * NEURAL CORE SERVICE
- * Using direct hardlink for API Key to ensure immediate functionality on Netlify Free Tier.
+ * ALPHA AI - NEURAL CORE SERVICE 3.0
+ * Direct hardlink with strict history sanitization.
  */
-const INTERNAL_KEY = "AIzaSyA3DuvOwAWRhPBTd94ivuEME78QPiHHhaQ";
+const ALPHA_KEY = "AIzaSyA3DuvOwAWRhPBTd94ivuEME78QPiHHhaQ";
 
 export const chatWithGeminiStream = async (
   history: { role: 'user' | 'model'; text: string }[],
@@ -15,57 +15,70 @@ export const chatWithGeminiStream = async (
   attachment?: { data: string; mimeType: string }
 ) => {
   try {
-    // Priority: 1. Environment Variable, 2. Hardcoded Key
-    const apiKey = process.env.API_KEY || INTERNAL_KEY;
+    const ai = new GoogleGenAI({ apiKey: ALPHA_KEY });
     
-    if (!apiKey) {
-      onChunk("[CRITICAL_ERROR]: Neural interface offline. Key verification failed.");
-      return;
-    }
+    // SANITIZE HISTORY: Gemini requires strict alternating user/model roles.
+    // If two user messages are together, we merge them.
+    const sanitizedHistory: any[] = [];
+    history.forEach((msg, idx) => {
+      const role = msg.role === 'user' ? 'user' : 'model';
+      if (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === role) {
+        // Merge with previous part if role is the same
+        sanitizedHistory[sanitizedHistory.length - 1].parts[0].text += `\n${msg.text}`;
+      } else {
+        sanitizedHistory.push({
+          role: role,
+          parts: [{ text: msg.text }]
+        });
+      }
+    });
 
-    const ai = new GoogleGenAI({ apiKey: apiKey });
-    
-    // Constructing the interaction payload
-    const contents = history.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
-
-    // Handle multimodal inputs (Images/Files) if present
-    if (attachment && contents.length > 0) {
-      const lastTurn = contents[contents.length - 1];
-      if (lastTurn.role === 'user') {
-        lastTurn.parts.push({
+    // Handle attachments on the last user message
+    if (attachment && sanitizedHistory.length > 0) {
+      const lastItem = sanitizedHistory[sanitizedHistory.length - 1];
+      if (lastItem.role === 'user') {
+        lastItem.parts.push({
           inlineData: {
             data: attachment.data,
             mimeType: attachment.mimeType
           }
-        } as any);
+        });
       }
     }
 
-    // Call the Gemini 3 streaming interface
-    const responseStream = await ai.models.generateContentStream({
-      model: modelName,
-      contents: contents,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-      }
-    });
+    // PRIMARY ATTEMPT
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model: modelName,
+        contents: sanitizedHistory,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.8,
+          topP: 0.95,
+        }
+      });
 
-    // Stream the neural response chunks to the UI
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        onChunk(chunk.text);
+      let received = false;
+      for await (const chunk of responseStream) {
+        if (chunk.text) {
+          received = true;
+          onChunk(chunk.text);
+        }
       }
+      if (!received) onChunk("[SYSTEM]: Neural core returned empty buffer. Retrying...");
+    } catch (modelErr: any) {
+      // FALLBACK: If Pro model fails (common for new keys), switch to Flash immediately
+      if (modelName !== 'gemini-3-flash-preview') {
+        console.warn("Pro model failed, falling back to Flash...");
+        return chatWithGeminiStream(history, systemInstruction, onChunk, 'gemini-3-flash-preview', attachment);
+      }
+      throw modelErr;
     }
-  } catch (error) {
-    console.error("Neural Interface Crash:", error);
-    const errorMsg = error instanceof Error ? error.message : "Neural link dropped";
-    onChunk(`[NEURAL_ERROR]: ${errorMsg}. Please ensure your API key has remaining quota.`);
+
+  } catch (error: any) {
+    console.error("Neural Interface Error:", error);
+    const msg = error?.message || "Connection Interrupted";
+    onChunk(`[NEURAL_ERROR]: ${msg}\n\nACTION: Check if your API key has billing enabled or if the Gemini 3 model is available in your region.`);
     throw error;
   }
 };

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, AppSettings } from '../types';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../firebase';
-import { Menu, Bell, ShieldCheck, X, Zap, Sun, Moon, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { Menu, Bell, ShieldCheck, X, Zap, Sun, Moon, ArrowLeft, ShieldAlert, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
@@ -64,12 +64,18 @@ const Header: React.FC<HeaderProps> = ({ user, appSettings, onNotify, isDarkMode
               </div>
             )}
           </div>
-          <h1 className="text-xl md:text-2xl font-black tracking-tighter flex items-center gap-1">
-            <span style={{ color: 'var(--text-primary)' }}>{appSettings?.app_name?.split(' ')[0] || 'ALPHA'}</span>
-            <span className="bg-gradient-to-r from-[#00f2ff] to-[#8000ff] bg-clip-text text-transparent">
-              {appSettings?.app_name?.split(' ')[1] || 'AI'}
-            </span>
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl md:text-2xl font-black tracking-tighter flex items-center gap-1">
+              <span style={{ color: 'var(--text-primary)' }}>{appSettings?.app_name?.split(' ')[0] || 'ALPHA'}</span>
+              <span className="bg-gradient-to-r from-[#00f2ff] to-[#8000ff] bg-clip-text text-transparent">
+                {appSettings?.app_name?.split(' ')[1] || 'AI'}
+              </span>
+            </h1>
+            <div className="flex items-center gap-1.5 px-0.5">
+               <div className="w-1.5 h-1.5 rounded-full bg-[#00ff9d] shadow-[0_0_5px_#00ff9d] animate-pulse"></div>
+               <span className="text-[7px] font-black uppercase tracking-[0.2em] text-[#00ff9d]/70">Neural Link Active</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-1 md:gap-2">
@@ -77,7 +83,6 @@ const Header: React.FC<HeaderProps> = ({ user, appSettings, onNotify, isDarkMode
             onClick={toggleTheme} 
             className="p-3 transition-all rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center" 
             style={{ color: 'var(--text-secondary)' }}
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
             {isDarkMode ? <Sun size={22} /> : <Moon size={22} />}
           </button>
@@ -110,7 +115,6 @@ const Header: React.FC<HeaderProps> = ({ user, appSettings, onNotify, isDarkMode
               <h2 className="text-3xl font-black text-white tracking-tighter italic uppercase text-center leading-none">
                 ADMIN <br/><span className={error ? 'text-red-500' : 'text-[#00f2ff]'}>ACCESS</span>
               </h2>
-              {error && <p className="text-[10px] font-black text-red-500 tracking-[0.2em] uppercase mt-4 text-center">{error}</p>}
             </div>
             
             <form onSubmit={handleAdminAuth} className="space-y-6">
@@ -124,7 +128,7 @@ const Header: React.FC<HeaderProps> = ({ user, appSettings, onNotify, isDarkMode
               />
               <button 
                 type="submit"
-                className="w-full font-black py-6 rounded-3xl bg-gradient-to-r from-[#00f2ff] to-[#8000ff] text-white uppercase tracking-[0.3em] text-[10px] shadow-2xl shadow-blue-500/20 active:scale-95 transition-all"
+                className="w-full font-black py-6 rounded-3xl bg-gradient-to-r from-[#00f2ff] to-[#8000ff] text-white uppercase tracking-[0.3em] text-[10px] shadow-2xl shadow-blue-500/20"
               >
                 Launch Dashboard
               </button>
