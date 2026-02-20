@@ -1,101 +1,103 @@
 
-import { GoogleGenAI } from "@google/genai";
-
 /**
- * ALPHA AI - NEURAL CORE SERVICE 7.0 (TURBO)
- * Hard-linked with Optimized Engine for Sub-Second Response
+ * ALPHA AI - NEURAL CORE SERVICE 8.0 (OPENROUTER ENGINE)
+ * Migrated from Gemini to OpenRouter for enhanced reliability and GLM-4.5 support.
  */
-const ALPHA_KEY = "AIzaSyCNi0t_UO9_VBIvyD4ZhotulBucIxt6RCc";
+const OPENROUTER_KEY = "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";
+const DEFAULT_MODEL = "z-ai/glm-4.5-air:free";
 
 export const chatWithGeminiStream = async (
   history: { role: 'user' | 'model'; text: string }[],
   systemInstruction: string,
   onChunk: (chunk: string) => void,
-  modelName: string = "gemini-flash-lite-latest", // Default to the fastest model
+  modelName: string = DEFAULT_MODEL,
   attachment?: { data: string; mimeType: string }
 ) => {
-  const ai = new GoogleGenAI({ apiKey: ALPHA_KEY });
-  
-  // OPTIMIZED HISTORY: Max speed by reducing token overhead
-  const sanitized = [];
-  let lastRole = '';
+  // Use the user-provided model if it's the default, otherwise use what's passed
+  const activeModel = modelName === "gemini-flash-lite-latest" || modelName === "gemini-3-pro-preview" 
+    ? DEFAULT_MODEL 
+    : modelName;
 
-  // Only take the last 10 messages for speed, but keep the core context
-  const recentHistory = history.length > 10 ? history.slice(-10) : history;
+  const messages = [
+    { role: 'system', content: systemInstruction },
+    ...history.map(m => ({
+      role: m.role === 'model' ? 'assistant' : 'user',
+      content: m.text
+    }))
+  ];
 
-  for (const msg of recentHistory) {
-    if (!msg.text) continue;
-    const currentRole = msg.role === 'user' ? 'user' : 'model';
-    
-    if (currentRole === lastRole) {
-      sanitized[sanitized.length - 1].parts[0].text += ` ${msg.text}`;
-    } else {
-      sanitized.push({
-        role: currentRole,
-        parts: [{ text: msg.text }]
-      });
-      lastRole = currentRole;
+  // Handle attachment if it exists and the last message is from the user
+  if (attachment && messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role === 'user') {
+      lastMessage.content = [
+        { type: 'text', text: lastMessage.content as string },
+        { 
+          type: 'image_url', 
+          image_url: { 
+            url: `data:${attachment.mimeType};base64,${attachment.data}` 
+          } 
+        }
+      ] as any;
     }
   }
-
-  if (sanitized.length > 0 && sanitized[0].role === 'model') sanitized.shift();
-
-  if (attachment && sanitized.length > 0) {
-    const last = sanitized[sanitized.length - 1];
-    if (last.role === 'user') {
-      last.parts.push({
-        inlineData: { data: attachment.data, mimeType: attachment.mimeType }
-      });
-    }
-  }
-
-  // CONTROLLER FOR ABORTING SLOW CONNECTIONS
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    if (!hasReceivedData) {
-      console.warn("Neural Link Latency High. Force Reconnecting...");
-      controller.abort();
-    }
-  }, 1800); // 1.8 seconds max wait for first byte
-
-  let hasReceivedData = false;
 
   try {
-    const responseStream = await ai.models.generateContentStream({
-      model: modelName,
-      contents: sanitized,
-      config: {
-        systemInstruction,
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "AI Studio Pro"
+      },
+      body: JSON.stringify({
+        model: activeModel,
+        messages: messages,
+        stream: true,
         temperature: 0.7,
-        topP: 0.8, // Faster sampling
-      }
+        top_p: 0.9,
+      })
     });
 
-    for await (const chunk of responseStream) {
-      const text = chunk.text;
-      if (text) {
-        if (!hasReceivedData) {
-          hasReceivedData = true;
-          clearTimeout(timeoutId);
-        }
-        onChunk(text);
-      }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API Error: ${response.status}`);
     }
 
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError' || !hasReceivedData) {
-      // INSTANT RETRY WITH FASTEST GLOBAL NODE
-      if (modelName !== 'gemini-flash-lite-latest') {
-        return chatWithGeminiStream(history, systemInstruction, onChunk, 'gemini-flash-lite-latest', attachment);
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) throw new Error("Neural Core: Stream Reader Unavailable");
+
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
+
+        if (trimmedLine.startsWith("data: ")) {
+          try {
+            const json = JSON.parse(trimmedLine.slice(6));
+            const content = json.choices[0]?.delta?.content;
+            if (content) {
+              onChunk(content);
+            }
+          } catch (e) {
+            // Ignore malformed JSON in stream
+          }
+        }
       }
     }
-    
-    console.error("Neural Error:", error);
-    onChunk(`[SYSTEM_NOTICE]: Re-syncing connection...`);
-    // Final attempt if everything fails
-    if (modelName === 'gemini-flash-lite-latest') {
-       onChunk(`\n(The neural link is currently congested. Retrying automatically...)`);
-    }
+  } catch (error: any) {
+    console.error("Neural Core Error:", error);
+    onChunk(`\n[SYSTEM_NOTICE]: Neural Link Interrupted. ${error.message}`);
   }
 };
